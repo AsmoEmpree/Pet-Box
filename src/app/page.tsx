@@ -919,9 +919,7 @@ export default function PetBoxHome() {
                 </button>
               </p>
               
-              <div className="mt-4 p-3 bg-blue-50 rounded text-xs text-blue-800">
-                <strong>Demo:</strong> Use admin@petbox.com / admin123 para acessar o painel admin
-              </div>
+
             </form>
           </div>
         </div>
