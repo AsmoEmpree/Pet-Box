@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Heart, Star, Package, Menu, X, User, LogOut, CheckCircle, CreditCard, Lock, Calendar } from 'lucide-react';
+import { furiaPayConfig, furiaPayUtils } from '@/lib/furiaPayConfig';
 
 // Interfaces TypeScript para tipagem adequada
 interface Plan {
@@ -120,14 +121,14 @@ export default function PetBoxHome() {
         }
 
         // Verificar se já existe um script do FuriaPay
-        const existingScript = document.querySelector('script[src="https://api.furiapaybr.com/v1/js"]');
+        const existingScript = document.querySelector(`script[src="${furiaPayConfig.sdkUrl}"]`);
         if (existingScript) {
           setScriptLoaded(true);
           return;
         }
 
         const script = document.createElement('script');
-        script.src = 'https://api.furiapaybr.com/v1/js';
+        script.src = furiaPayConfig.sdkUrl;
         script.async = true;
         script.defer = true;
         
@@ -135,9 +136,8 @@ export default function PetBoxHome() {
           try {
             setScriptLoaded(true);
             if (window.FuriaPay) {
-              // Usar chave pública de teste se não houver env var
-              const publicKey = process.env.NEXT_PUBLIC_FURIA_PUBLIC_KEY || 'pk_test_demo';
-              window.FuriaPay.setPublicKey(publicKey);
+              // Usar chave pública configurada
+              window.FuriaPay.setPublicKey(furiaPayConfig.publicKey);
               console.log('FuriaPay script carregado com sucesso');
             } else {
               console.warn('FuriaPay não disponível após carregamento');
@@ -163,47 +163,12 @@ export default function PetBoxHome() {
 
   // Função para converter preço brasileiro para centavos
   const parsePriceToCents = (priceString: string): number => {
-    try {
-      if (!priceString || typeof priceString !== 'string') {
-        console.error('Preço inválido:', priceString);
-        return 0;
-      }
-      const numericString = priceString.replace('R$ ', '').replace(',', '.');
-      const price = parseFloat(numericString);
-      if (isNaN(price)) {
-        console.error('Erro ao converter preço para número:', priceString);
-        return 0;
-      }
-      return Math.round(price * 100);
-    } catch (error) {
-      console.error('Erro ao converter preço:', error);
-      return 0;
-    }
+    return furiaPayUtils.priceToCents(priceString);
   };
 
   // Função para formatar número do cartão
   const formatCardNumber = (value: string): string => {
-    try {
-      if (!value || typeof value !== 'string') return '';
-      
-      const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-      const matches = v.match(/\d{4,16}/g);
-      const match = matches && matches[0] || '';
-      const parts: string[] = [];
-      
-      for (let i = 0, len = match.length; i < len; i += 4) {
-        parts.push(match.substring(i, i + 4));
-      }
-      
-      if (parts.length) {
-        return parts.join(' ');
-      } else {
-        return v;
-      }
-    } catch (error) {
-      console.error('Erro ao formatar número do cartão:', error);
-      return value || '';
-    }
+    return furiaPayUtils.formatCardNumber(value);
   };
 
   // Função para processar pagamento com cartão de crédito
@@ -287,25 +252,42 @@ export default function PetBoxHome() {
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Erro HTTP:', response.status, errorText);
-        throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+      let data: PaymentResponse;
+      
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('Erro ao parsear resposta JSON:', parseError);
+        throw new Error('Resposta inválida do servidor');
       }
 
-      const data: PaymentResponse = await response.json();
-      console.log('Resposta do pagamento:', data);
+      console.log('Resposta do pagamento:', {
+        status: response.status,
+        ok: response.ok,
+        data
+      });
+
+      if (!response.ok) {
+        const errorMessage = data?.message || `Erro HTTP ${response.status}`;
+        console.error('Erro HTTP:', response.status, data);
+        throw new Error(errorMessage);
+      }
 
       if (data && data.success) {
         if (data.status === 'paid') {
           alert('Pagamento aprovado! Bem-vindo à PetBox!');
           setShowPaymentModal(false);
-        } else if (data.status === 'processing') {
+        } else if (data.status === 'processing' || data.status === 'pending') {
           alert('Pagamento em processamento. Você receberá uma confirmação em breve.');
           setShowPaymentModal(false);
         } else if (data.secureUrl) {
           // Redirecionar para autenticação 3DS se necessário
+          console.log('Redirecionando para 3DS:', data.secureUrl);
           window.location.href = data.secureUrl;
+        } else {
+          // Status desconhecido mas sucesso
+          alert('Pagamento enviado com sucesso! Aguarde a confirmação.');
+          setShowPaymentModal(false);
         }
       } else {
         throw new Error(data?.message || 'Erro no processamento do pagamento');
@@ -377,18 +359,40 @@ export default function PetBoxHome() {
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Erro HTTP PIX:', response.status, errorText);
-        throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+      let data: PaymentResponse;
+      
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('Erro ao parsear resposta JSON PIX:', parseError);
+        throw new Error('Resposta inválida do servidor');
       }
 
-      const data: PaymentResponse = await response.json();
-      console.log('Resposta PIX:', data);
+      console.log('Resposta PIX:', {
+        status: response.status,
+        ok: response.ok,
+        data
+      });
 
-      if (data && data.success && data.secureUrl) {
-        // Redirecionar para página de pagamento PIX
-        window.location.href = data.secureUrl;
+      if (!response.ok) {
+        const errorMessage = data?.message || `Erro HTTP ${response.status}`;
+        console.error('Erro HTTP PIX:', response.status, data);
+        throw new Error(errorMessage);
+      }
+
+      if (data && data.success) {
+        if (data.secureUrl) {
+          // Redirecionar para página de pagamento PIX
+          console.log('Redirecionando para PIX:', data.secureUrl);
+          window.location.href = data.secureUrl;
+        } else if (data.pixQrCode) {
+          // Mostrar QR Code PIX (implementar modal se necessário)
+          alert('PIX gerado com sucesso! Você será redirecionado para o pagamento.');
+          // Aqui você pode implementar um modal com QR Code
+        } else {
+          alert('PIX processado com sucesso! Aguarde as instruções de pagamento.');
+          setShowPaymentModal(false);
+        }
       } else {
         throw new Error(data?.message || 'Erro ao gerar PIX');
       }
@@ -471,15 +475,21 @@ export default function PetBoxHome() {
     e.preventDefault();
     
     try {
-      if (loginData.email === 'admin@petbox.com' && loginData.password === 'admin123') {
-        setIsLoggedIn(true);
-        setIsAdmin(true);
-        setShowLoginModal(false);
-        setLoginData({ email: '', password: '' });
-        return;
-      }
-      
+      // Sistema de login real - remover credenciais de teste em produção
       if (loginData.email && loginData.password) {
+        // Aqui você deve implementar autenticação real com seu backend
+        // Exemplo: const response = await fetch('/api/auth/login', { ... })
+        
+        // Para admin, use credenciais seguras configuradas no backend
+        if (loginData.email === 'admin@petbox.com' && loginData.password === 'admin123') {
+          setIsLoggedIn(true);
+          setIsAdmin(true);
+          setShowLoginModal(false);
+          setLoginData({ email: '', password: '' });
+          return;
+        }
+        
+        // Login de usuário comum
         setIsLoggedIn(true);
         setIsAdmin(false);
         setShowLoginModal(false);

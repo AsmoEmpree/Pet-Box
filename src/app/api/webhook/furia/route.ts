@@ -2,128 +2,240 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const webhookData = await request.json();
+    const body = await request.json();
     
-    console.log('Webhook recebido do FuriaPay:', JSON.stringify(webhookData, null, 2));
-    
-    // Extrair dados do webhook
-    const { type, objectId, data } = webhookData;
-    
-    if (type === 'transaction' && data) {
-      const {
-        id,
-        status,
-        amount,
-        paymentMethod,
-        customer,
-        metadata,
-        paidAt,
-        refusedReason
-      } = data;
-      
-      // Parse do metadata para obter informações do pedido
-      let orderInfo = {};
-      try {
-        orderInfo = JSON.parse(metadata || '{}');
-      } catch (e) {
-        console.warn('Erro ao fazer parse do metadata:', e);
-      }
-      
-      console.log('Processando transação:', {
-        id,
-        status,
-        amount: amount / 100, // Converter de centavos para reais
-        paymentMethod,
-        customerEmail: customer?.email,
-        orderInfo,
-        paidAt,
-        refusedReason
-      });
-      
-      // Aqui você pode implementar a lógica de negócio:
-      switch (status) {
-        case 'paid':
-          console.log(`✅ Pagamento aprovado para transação ${id}`);
-          // Implementar: ativar assinatura, enviar email de confirmação, etc.
-          break;
-          
-        case 'refused':
-          console.log(`❌ Pagamento recusado para transação ${id}: ${refusedReason}`);
-          // Implementar: notificar cliente sobre recusa, etc.
-          break;
-          
-        case 'processing':
-          console.log(`⏳ Pagamento em processamento para transação ${id}`);
-          // Implementar: aguardar confirmação, etc.
-          break;
-          
-        case 'refunded':
-          console.log(`💰 Pagamento estornado para transação ${id}`);
-          // Implementar: cancelar assinatura, processar estorno, etc.
-          break;
-          
-        default:
-          console.log(`ℹ️ Status desconhecido para transação ${id}: ${status}`);
-      }
-      
-      // Aqui você pode salvar no banco de dados, enviar emails, etc.
-      // Exemplo de estrutura para salvar:
-      const transactionRecord = {
-        furiaPayId: id,
-        status,
-        amount: amount / 100,
-        paymentMethod,
-        customerEmail: customer?.email,
-        customerName: customer?.name,
-        planId: orderInfo.planId,
-        planName: orderInfo.planName,
-        orderId: orderInfo.orderId,
-        paidAt,
-        refusedReason,
-        processedAt: new Date().toISOString()
-      };
-      
-      console.log('Dados para salvar no banco:', transactionRecord);
-      
-      // TODO: Implementar salvamento no banco de dados
-      // await saveTransactionToDatabase(transactionRecord);
-      
-      // TODO: Implementar envio de emails
-      // if (status === 'paid') {
-      //   await sendConfirmationEmail(customer.email, orderInfo);
-      // }
+    console.log('🔔 Webhook FuriaPay recebido:', {
+      event: body.event,
+      transactionId: body.transaction?.id,
+      status: body.transaction?.status,
+      amount: body.transaction?.amount,
+      customerEmail: body.transaction?.customer?.email,
+      timestamp: new Date().toISOString()
+    });
+
+    // Validar se é uma notificação válida do FuriaPay
+    if (!body.event || !body.transaction) {
+      console.error('❌ Webhook inválido - dados obrigatórios ausentes');
+      return NextResponse.json(
+        { error: 'Invalid webhook data' },
+        { status: 400 }
+      );
     }
-    
-    // Sempre retornar 200 para confirmar recebimento do webhook
+
+    // Processar diferentes tipos de eventos
+    switch (body.event) {
+      case 'transaction.paid':
+        console.log('✅ Pagamento APROVADO:', {
+          transactionId: body.transaction.id,
+          amount: body.transaction.amount,
+          customerEmail: body.transaction.customer?.email
+        });
+        await handlePaymentApproved(body.transaction);
+        break;
+
+      case 'transaction.refused':
+        console.log('❌ Pagamento RECUSADO:', {
+          transactionId: body.transaction.id,
+          reason: body.transaction.refuse_reason,
+          customerEmail: body.transaction.customer?.email
+        });
+        await handlePaymentRefused(body.transaction);
+        break;
+
+      case 'transaction.pending':
+        console.log('⏳ Pagamento PENDENTE:', {
+          transactionId: body.transaction.id,
+          paymentMethod: body.transaction.payment_method,
+          customerEmail: body.transaction.customer?.email
+        });
+        await handlePaymentPending(body.transaction);
+        break;
+
+      case 'transaction.chargedback':
+        console.log('⚠️ CHARGEBACK detectado:', {
+          transactionId: body.transaction.id,
+          amount: body.transaction.amount,
+          customerEmail: body.transaction.customer?.email
+        });
+        await handleChargeback(body.transaction);
+        break;
+
+      default:
+        console.log(`❓ Evento não tratado: ${body.event}`);
+    }
+
+    // Sempre retornar 200 para confirmar recebimento
     return NextResponse.json({ 
-      success: true, 
-      message: 'Webhook processado com sucesso',
-      received: {
-        type,
-        objectId,
-        status: data?.status
-      }
+      received: true,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('💥 Erro crítico no webhook FuriaPay:', {
+      error: error instanceof Error ? error.message : 'Erro desconhecido',
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString()
     });
     
-  } catch (error) {
-    console.error('Erro ao processar webhook:', error);
-    
-    const errorMessage = error instanceof Error ? error.message : 'Erro interno do servidor';
-    
-    // Mesmo com erro, retornar 200 para evitar reenvios desnecessários
-    // Em produção, você pode querer retornar 500 para que o FuriaPay reenvie
-    return NextResponse.json({ 
-      success: false, 
-      message: 'Erro ao processar webhook: ' + errorMessage,
-      error: errorMessage
-    }, { status: 200 });
+    // Retornar 500 para que o FuriaPay tente reenviar
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
-// Método GET para verificar se o endpoint está funcionando
+// Função para processar pagamento aprovado
+async function handlePaymentApproved(transaction: any) {
+  try {
+    console.log('🎉 Processando pagamento aprovado:', transaction.id);
+    
+    // Extrair metadata do pedido
+    const metadata = transaction.metadata || {};
+    const planId = metadata.planId;
+    const planName = metadata.planName;
+    const customerEmail = transaction.customer?.email;
+    const customerName = transaction.customer?.name;
+
+    if (customerEmail && planId) {
+      // AQUI VOCÊ DEVE INTEGRAR COM SEU SISTEMA:
+      // 1. Ativar assinatura do cliente no banco de dados
+      // 2. Enviar email de boas-vindas
+      // 3. Criar perfil do cliente
+      // 4. Agendar primeira entrega
+      
+      console.log('🚀 AÇÃO NECESSÁRIA - Ativar assinatura:', {
+        transactionId: transaction.id,
+        planId,
+        planName,
+        customerEmail,
+        customerName,
+        amount: transaction.amount / 100, // Converter centavos para reais
+        timestamp: new Date().toISOString()
+      });
+
+      // TODO: Implementar integração com seu sistema de assinaturas
+      // Exemplo:
+      // await activateSubscription({
+      //   customerId: customerEmail,
+      //   planId: planId,
+      //   transactionId: transaction.id,
+      //   startDate: new Date()
+      // });
+      
+      // TODO: Enviar email de confirmação
+      // await sendWelcomeEmail(customerEmail, customerName, planName);
+    }
+  } catch (error) {
+    console.error('❌ Erro ao processar pagamento aprovado:', error);
+  }
+}
+
+// Função para processar pagamento recusado
+async function handlePaymentRefused(transaction: any) {
+  try {
+    console.log('❌ Processando pagamento recusado:', transaction.id);
+    
+    const customerEmail = transaction.customer?.email;
+    const customerName = transaction.customer?.name;
+    const refusalReason = transaction.refuse_reason;
+
+    if (customerEmail) {
+      console.log('📧 AÇÃO NECESSÁRIA - Notificar cliente sobre recusa:', {
+        transactionId: transaction.id,
+        customerEmail,
+        customerName,
+        reason: refusalReason,
+        timestamp: new Date().toISOString()
+      });
+
+      // TODO: Enviar email ou notificação sobre a recusa
+      // await sendPaymentRefusedEmail(customerEmail, customerName, refusalReason);
+      
+      // TODO: Sugerir métodos alternativos de pagamento
+      // await suggestAlternativePaymentMethods(customerEmail);
+    }
+  } catch (error) {
+    console.error('❌ Erro ao processar pagamento recusado:', error);
+  }
+}
+
+// Função para processar pagamento pendente
+async function handlePaymentPending(transaction: any) {
+  try {
+    console.log('⏳ Processando pagamento pendente:', transaction.id);
+    
+    const customerEmail = transaction.customer?.email;
+    const customerName = transaction.customer?.name;
+    const paymentMethod = transaction.payment_method;
+
+    if (customerEmail) {
+      if (paymentMethod === 'pix') {
+        console.log('💰 PIX pendente - aguardando pagamento:', {
+          transactionId: transaction.id,
+          customerEmail,
+          customerName,
+          timestamp: new Date().toISOString()
+        });
+        
+        // TODO: Enviar instruções de pagamento PIX
+        // await sendPixInstructions(customerEmail, transaction.pix_code, transaction.pix_qr_code);
+        
+      } else if (paymentMethod === 'boleto') {
+        console.log('🧾 Boleto pendente - aguardando pagamento:', {
+          transactionId: transaction.id,
+          customerEmail,
+          customerName,
+          timestamp: new Date().toISOString()
+        });
+        
+        // TODO: Enviar boleto por email
+        // await sendBoletoEmail(customerEmail, transaction.boleto_url);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Erro ao processar pagamento pendente:', error);
+  }
+}
+
+// Função para processar chargeback
+async function handleChargeback(transaction: any) {
+  try {
+    console.log('⚠️ Processando chargeback:', transaction.id);
+    
+    const customerEmail = transaction.customer?.email;
+    const customerName = transaction.customer?.name;
+
+    if (customerEmail) {
+      console.log('🚨 AÇÃO URGENTE - Chargeback detectado:', {
+        transactionId: transaction.id,
+        customerEmail,
+        customerName,
+        amount: transaction.amount / 100,
+        timestamp: new Date().toISOString()
+      });
+
+      // TODO: Suspender assinatura imediatamente
+      // await suspendSubscription(customerEmail, 'chargeback');
+      
+      // TODO: Notificar equipe de suporte
+      // await notifySupportTeam('chargeback', transaction);
+      
+      // TODO: Iniciar processo de contestação se necessário
+      // await initiateChargebackDispute(transaction.id);
+    }
+  } catch (error) {
+    console.error('❌ Erro ao processar chargeback:', error);
+  }
+}
+
+// Permitir apenas POST
 export async function GET() {
-  return NextResponse.json({ 
-    message: 'Webhook endpoint do FuriaPay está funcionando',
-    timestamp: new Date().toISOString()
-  });
+  return NextResponse.json(
+    { 
+      error: 'Method not allowed',
+      message: 'Este endpoint aceita apenas requisições POST do FuriaPay'
+    },
+    { status: 405 }
+  );
 }
