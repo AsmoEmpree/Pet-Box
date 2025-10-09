@@ -3,6 +3,60 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, Star, Package, Menu, X, User, LogOut, CheckCircle, CreditCard, Lock, Calendar } from 'lucide-react';
 
+// Interfaces TypeScript para tipagem adequada
+interface Plan {
+  id: string;
+  name: string;
+  price: string;
+  description: string;
+  features: string[];
+  popular: boolean;
+}
+
+interface LoginData {
+  email: string;
+  password: string;
+}
+
+interface RegisterData {
+  tutorName: string;
+  email: string;
+  password: string;
+  petName: string;
+  petType: string;
+  petAge: string;
+  petSize: string;
+}
+
+interface CardData {
+  number: string;
+  holderName: string;
+  expirationMonth: string;
+  expirationYear: string;
+  cvv: string;
+}
+
+interface CustomerData {
+  name: string;
+  email: string;
+  phone: string;
+  document: string;
+  zipCode: string;
+  street: string;
+  streetNumber: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+}
+
+interface PaymentResponse {
+  success: boolean;
+  status?: string;
+  secureUrl?: string;
+  message?: string;
+  transactionId?: string;
+}
+
 // Declaração global para o FuriaPay
 declare global {
   interface Window {
@@ -13,19 +67,19 @@ declare global {
 }
 
 export default function PetBoxHome() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('credit_card');
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
+  const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
+  const [showRegisterModal, setShowRegisterModal] = useState<boolean>(false);
+  const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'pix'>('credit_card');
+  const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
+  const [scriptLoaded, setScriptLoaded] = useState<boolean>(false);
 
-  const [loginData, setLoginData] = useState({ email: '', password: '' });
-  const [registerData, setRegisterData] = useState({
+  const [loginData, setLoginData] = useState<LoginData>({ email: '', password: '' });
+  const [registerData, setRegisterData] = useState<RegisterData>({
     tutorName: '',
     email: '',
     password: '',
@@ -35,7 +89,7 @@ export default function PetBoxHome() {
     petSize: ''
   });
 
-  const [cardData, setCardData] = useState({
+  const [cardData, setCardData] = useState<CardData>({
     number: '',
     holderName: '',
     expirationMonth: '',
@@ -43,7 +97,7 @@ export default function PetBoxHome() {
     cvv: ''
   });
 
-  const [customerData, setCustomerData] = useState({
+  const [customerData, setCustomerData] = useState<CustomerData>({
     name: '',
     email: '',
     phone: '',
@@ -58,50 +112,68 @@ export default function PetBoxHome() {
 
   // Carregar script do FuriaPay e configurar chave pública
   useEffect(() => {
-    const loadFuriaPayScript = () => {
-      // Verificar se o script já foi carregado
-      if (window.FuriaPay || scriptLoaded) {
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://api.furiapaybr.com/v1/js';
-      script.async = true;
-      
-      script.onload = () => {
-        try {
-          setScriptLoaded(true);
-          if (window.FuriaPay && process.env.NEXT_PUBLIC_FURIA_PUBLIC_KEY) {
-            window.FuriaPay.setPublicKey(process.env.NEXT_PUBLIC_FURIA_PUBLIC_KEY);
-            console.log('FuriaPay script carregado com sucesso');
-          } else {
-            console.warn('FuriaPay não disponível ou chave pública não configurada');
-          }
-        } catch (error) {
-          console.error('Erro ao configurar FuriaPay:', error);
+    const loadFuriaPayScript = async (): Promise<void> => {
+      try {
+        // Verificar se o script já foi carregado
+        if (window.FuriaPay || scriptLoaded) {
+          return;
         }
-      };
-      
-      script.onerror = (error) => {
-        console.error('Erro ao carregar script do FuriaPay:', error);
-        setScriptLoaded(false);
-      };
 
-      document.head.appendChild(script);
+        // Verificar se já existe um script do FuriaPay
+        const existingScript = document.querySelector('script[src="https://api.furiapaybr.com/v1/js"]');
+        if (existingScript) {
+          setScriptLoaded(true);
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = 'https://api.furiapaybr.com/v1/js';
+        script.async = true;
+        script.defer = true;
+        
+        script.onload = () => {
+          try {
+            setScriptLoaded(true);
+            if (window.FuriaPay) {
+              // Usar chave pública de teste se não houver env var
+              const publicKey = process.env.NEXT_PUBLIC_FURIA_PUBLIC_KEY || 'pk_test_demo';
+              window.FuriaPay.setPublicKey(publicKey);
+              console.log('FuriaPay script carregado com sucesso');
+            } else {
+              console.warn('FuriaPay não disponível após carregamento');
+            }
+          } catch (error) {
+            console.error('Erro ao configurar FuriaPay:', error);
+          }
+        };
+        
+        script.onerror = (error) => {
+          console.error('Erro ao carregar script do FuriaPay:', error);
+          setScriptLoaded(false);
+        };
+
+        document.head.appendChild(script);
+      } catch (error) {
+        console.error('Erro no carregamento do script:', error);
+      }
     };
 
     loadFuriaPayScript();
-
-    return () => {
-      // Cleanup não é necessário pois o script deve permanecer carregado
-    };
-  }, [scriptLoaded]);
+  }, []);
 
   // Função para converter preço brasileiro para centavos
-  const parsePriceToCents = (priceString) => {
+  const parsePriceToCents = (priceString: string): number => {
     try {
+      if (!priceString || typeof priceString !== 'string') {
+        console.error('Preço inválido:', priceString);
+        return 0;
+      }
       const numericString = priceString.replace('R$ ', '').replace(',', '.');
       const price = parseFloat(numericString);
+      if (isNaN(price)) {
+        console.error('Erro ao converter preço para número:', priceString);
+        return 0;
+      }
       return Math.round(price * 100);
     } catch (error) {
       console.error('Erro ao converter preço:', error);
@@ -110,15 +182,19 @@ export default function PetBoxHome() {
   };
 
   // Função para formatar número do cartão
-  const formatCardNumber = (value) => {
+  const formatCardNumber = (value: string): string => {
     try {
+      if (!value || typeof value !== 'string') return '';
+      
       const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
       const matches = v.match(/\d{4,16}/g);
       const match = matches && matches[0] || '';
-      const parts = [];
+      const parts: string[] = [];
+      
       for (let i = 0, len = match.length; i < len; i += 4) {
         parts.push(match.substring(i, i + 4));
       }
+      
       if (parts.length) {
         return parts.join(' ');
       } else {
@@ -126,12 +202,18 @@ export default function PetBoxHome() {
       }
     } catch (error) {
       console.error('Erro ao formatar número do cartão:', error);
-      return value;
+      return value || '';
     }
   };
 
   // Função para processar pagamento com cartão de crédito
-  const processCardPayment = async (plan) => {
+  const processCardPayment = async (plan: Plan): Promise<void> => {
+    if (!plan) {
+      console.error('Plano não selecionado');
+      alert('Erro: Plano não selecionado');
+      return;
+    }
+
     setIsProcessingPayment(true);
     
     try {
@@ -191,6 +273,12 @@ export default function PetBoxHome() {
         }]
       };
 
+      console.log('Enviando dados de pagamento:', {
+        amount,
+        paymentMethod: 'credit_card',
+        customerEmail: customerData.email
+      });
+
       const response = await fetch('/api/process-payment', {
         method: 'POST',
         headers: {
@@ -200,12 +288,15 @@ export default function PetBoxHome() {
       });
 
       if (!response.ok) {
-        throw new Error(`Erro HTTP: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Erro HTTP:', response.status, errorText);
+        throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
       }
 
-      const data = await response.json();
+      const data: PaymentResponse = await response.json();
+      console.log('Resposta do pagamento:', data);
 
-      if (data.success) {
+      if (data && data.success) {
         if (data.status === 'paid') {
           alert('Pagamento aprovado! Bem-vindo à PetBox!');
           setShowPaymentModal(false);
@@ -217,7 +308,7 @@ export default function PetBoxHome() {
           window.location.href = data.secureUrl;
         }
       } else {
-        throw new Error(data.message || 'Erro no processamento do pagamento');
+        throw new Error(data?.message || 'Erro no processamento do pagamento');
       }
     } catch (error) {
       console.error('Erro no pagamento:', error);
@@ -229,7 +320,13 @@ export default function PetBoxHome() {
   };
 
   // Função para processar pagamento PIX
-  const processPixPayment = async (plan) => {
+  const processPixPayment = async (plan: Plan): Promise<void> => {
+    if (!plan) {
+      console.error('Plano não selecionado');
+      alert('Erro: Plano não selecionado');
+      return;
+    }
+
     setIsProcessingPayment(true);
     
     try {
@@ -266,6 +363,12 @@ export default function PetBoxHome() {
         }]
       };
 
+      console.log('Enviando dados PIX:', {
+        amount,
+        paymentMethod: 'pix',
+        customerEmail: customerData.email
+      });
+
       const response = await fetch('/api/process-payment', {
         method: 'POST',
         headers: {
@@ -275,16 +378,19 @@ export default function PetBoxHome() {
       });
 
       if (!response.ok) {
-        throw new Error(`Erro HTTP: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Erro HTTP PIX:', response.status, errorText);
+        throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
       }
 
-      const data = await response.json();
+      const data: PaymentResponse = await response.json();
+      console.log('Resposta PIX:', data);
 
-      if (data.success && data.secureUrl) {
+      if (data && data.success && data.secureUrl) {
         // Redirecionar para página de pagamento PIX
         window.location.href = data.secureUrl;
       } else {
-        throw new Error(data.message || 'Erro ao gerar PIX');
+        throw new Error(data?.message || 'Erro ao gerar PIX');
       }
     } catch (error) {
       console.error('Erro no PIX:', error);
@@ -295,7 +401,7 @@ export default function PetBoxHome() {
     }
   };
 
-  const plans = [
+  const plans: Plan[] = [
     {
       id: 'basico',
       name: 'Plano Básico',
@@ -361,7 +467,7 @@ export default function PetBoxHome() {
     }
   ];
 
-  const handleLogin = (e) => {
+  const handleLogin = (e: React.FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
     
     try {
@@ -385,7 +491,7 @@ export default function PetBoxHome() {
     }
   };
 
-  const handleRegister = (e) => {
+  const handleRegister = (e: React.FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
     
     try {
@@ -417,7 +523,7 @@ export default function PetBoxHome() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = (): void => {
     try {
       setIsLoggedIn(false);
       setIsAdmin(false);
@@ -426,7 +532,7 @@ export default function PetBoxHome() {
     }
   };
 
-  const selectPlan = (plan) => {
+  const selectPlan = (plan: Plan): void => {
     try {
       if (!isLoggedIn) {
         setShowLoginModal(true);
@@ -918,8 +1024,6 @@ export default function PetBoxHome() {
                   Cadastre-se
                 </button>
               </p>
-              
-
             </form>
           </div>
         </div>
