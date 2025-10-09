@@ -1,314 +1,484 @@
-"use client";
+'use client';
 
-import { useState } from 'react';
-import { Check, Star, Heart, Gift, Truck, Shield, ChevronRight, Menu, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Heart, Star, Package, Menu, X, User, LogOut, CheckCircle, CreditCard } from 'lucide-react';
 
 export default function PetBoxHome() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState('premium');
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const [loginData, setLoginData] = useState({ email: '', password: '' });
+  const [registerData, setRegisterData] = useState({
+    tutorName: '',
+    email: '',
+    password: '',
+    petName: '',
+    petType: '',
+    petAge: '',
+    petSize: ''
+  });
+
+  // Carregar script do FuriaPay e configurar chave pública
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://api.furiapaybr.com/v1/js';
+    script.onload = () => {
+      if (window.FuriaPay && process.env.NEXT_PUBLIC_FURIA_PUBLIC_KEY) {
+        window.FuriaPay.setPublicKey(process.env.NEXT_PUBLIC_FURIA_PUBLIC_KEY);
+      }
+    };
+    document.head.appendChild(script);
+
+    return () => {
+      document.head.removeChild(script);
+    };
+  }, []);
+
+  // Função para converter preço brasileiro para centavos
+  const parsePriceToCents = (priceString) => {
+    // Remove "R$ " e substitui vírgula por ponto
+    const numericString = priceString.replace('R$ ', '').replace(',', '.');
+    const price = parseFloat(numericString);
+    return Math.round(price * 100); // Converte para centavos
+  };
+
+  // Função para processar pagamento
+  const processPayment = async (plan) => {
+    try {
+      const amount = parsePriceToCents(plan.price);
+      const publicKey = process.env.NEXT_PUBLIC_FURIA_PUBLIC_KEY;
+      const secretKey = process.env.FURIA_SECRET_KEY;
+
+      if (!publicKey || !secretKey) {
+        alert('Configuração de pagamento incompleta. Verifique as variáveis de ambiente.');
+        return;
+      }
+
+      const auth = 'Basic ' + Buffer.from(publicKey + ':' + secretKey).toString('base64');
+
+      const payload = {
+        amount,
+        paymentMethod: 'pix',
+        // Adicione outros campos necessários conforme sua API
+        // customer, items, etc.
+      };
+
+      const response = await fetch('https://api.furiapaybr.com/v1/transactions', {
+        method: 'POST',
+        headers: {
+          Authorization: auth,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.secureUrl) {
+        // Redirecionar para a página de pagamento
+        window.location.href = data.secureUrl;
+      } else {
+        alert('Erro ao processar pagamento: ' + (data.message || 'Erro desconhecido'));
+      }
+    } catch (error) {
+      console.error('Erro na requisição:', error);
+      alert('Erro ao conectar com o gateway de pagamento. Tente novamente.');
+    }
+  };
 
   const plans = [
     {
       id: 'basico',
-      name: 'Básico',
-      price: 'R$ 49,90',
-      originalPrice: 'R$ 69,90',
-      description: 'Perfeito para começar a mimar seu pet',
-      items: [
-        '3-4 produtos selecionados',
-        '1 brinquedo premium',
-        '2 petiscos naturais',
-        'Ração premium (amostra)',
-        'Frete grátis'
+      name: 'Plano Básico',
+      price: 'R$ 39,90',
+      description: 'Perfeito para começar a aventura',
+      features: [
+        '3-4 produtos por mês',
+        '1 roupa temática',
+        '2 brinquedos',
+        '1 acessório',
+        'Entrega grátis',
+        'Suporte por email'
       ],
       popular: false
     },
     {
       id: 'premium',
-      name: 'Premium',
-      price: 'R$ 79,90',
-      originalPrice: 'R$ 99,90',
-      description: 'O favorito dos tutores exigentes',
-      items: [
-        '5-6 produtos selecionados',
-        '2 brinquedos premium',
-        '3 petiscos gourmet',
-        'Ração premium (porção completa)',
-        '1 acessório exclusivo',
-        'Frete grátis',
+      name: 'Plano Premium',
+      price: 'R$ 59,90',
+      description: 'A escolha mais popular dos tutores',
+      features: [
+        '5-6 produtos por mês',
+        '2 roupas temáticas',
+        '2-3 brinquedos',
+        '2 acessórios',
+        'Entrega expressa grátis',
+        'Suporte prioritário',
         'Personalização avançada'
       ],
       popular: true
     },
     {
-      id: 'super',
-      name: 'Super Premium',
-      price: 'R$ 129,90',
-      originalPrice: 'R$ 159,90',
-      description: 'A experiência mais completa para seu pet',
-      items: [
-        '7-8 produtos selecionados',
-        '3 brinquedos premium',
-        '4 petiscos gourmet',
-        'Ração super premium',
-        '2 acessórios exclusivos',
-        'Produto de higiene premium',
-        'Frete grátis',
-        'Personalização total',
-        'Suporte prioritário'
+      id: 'deluxe',
+      name: 'Plano Deluxe',
+      price: 'R$ 89,90',
+      description: 'Experiência completa e exclusiva',
+      features: [
+        '7-8 produtos premium',
+        '3 roupas temáticas',
+        '3-4 brinquedos',
+        '3 acessórios exclusivos',
+        'Entrega expressa grátis',
+        'Suporte VIP 24/7',
+        'Personalização total'
+      ],
+      popular: false
+    },
+    {
+      id: 'ultimate',
+      name: 'Plano Ultimate',
+      price: 'R$ 231,90',
+      description: 'O máximo em luxo e exclusividade',
+      features: [
+        '12-15 produtos ultra premium',
+        '5 roupas de grife exclusivas',
+        '5-6 brinquedos importados',
+        '4 acessórios de luxo',
+        'Entrega expressa prioritária',
+        'Concierge pessoal 24/7',
+        'Personalização completa'
       ],
       popular: false
     }
   ];
 
-  const testimonials = [
-    {
-      name: 'Marina Silva',
-      pet: 'Luna (Golden Retriever)',
-      text: 'A Luna fica louca quando chega a caixinha! Os produtos são de altíssima qualidade e sempre tem novidades.',
-      rating: 5
-    },
-    {
-      name: 'Carlos Mendes',
-      pet: 'Mimi (Persa)',
-      text: 'Minha gata nunca foi tão feliz. Os petiscos são naturais e os brinquedos são resistentes. Recomendo!',
-      rating: 5
-    },
-    {
-      name: 'Ana Costa',
-      pet: 'Thor (Labrador)',
-      text: 'Praticidade total! Não preciso mais me preocupar em escolher produtos. Tudo chega certinho em casa.',
-      rating: 5
+  const handleLogin = (e) => {
+    e.preventDefault();
+    
+    if (loginData.email === 'admin@petbox.com' && loginData.password === 'admin123') {
+      setIsLoggedIn(true);
+      setIsAdmin(true);
+      setShowLoginModal(false);
+      setLoginData({ email: '', password: '' });
+      return;
     }
-  ];
+    
+    if (loginData.email && loginData.password) {
+      setIsLoggedIn(true);
+      setIsAdmin(false);
+      setShowLoginModal(false);
+      setLoginData({ email: '', password: '' });
+    }
+  };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50">
-      {/* Header */}
-      <header className="bg-white/90 backdrop-blur-sm border-b border-orange-100 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-red-500 rounded-xl flex items-center justify-center">
-                <Heart className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
-                PetBox
-              </span>
-            </div>
+  const handleRegister = (e) => {
+    e.preventDefault();
+    
+    if (registerData.tutorName && registerData.email && registerData.password && registerData.petName) {
+      setIsLoggedIn(true);
+      setIsAdmin(false);
+      setShowRegisterModal(false);
+      setRegisterData({
+        tutorName: '',
+        email: '',
+        password: '',
+        petName: '',
+        petType: '',
+        petAge: '',
+        petSize: ''
+      });
+    }
+  };
 
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center space-x-8">
-              <a href="#como-funciona" className="text-gray-700 hover:text-orange-600 transition-colors">
-                Como funciona
-              </a>
-              <a href="#planos" className="text-gray-700 hover:text-orange-600 transition-colors">
-                Planos
-              </a>
-              <a href="#depoimentos" className="text-gray-700 hover:text-orange-600 transition-colors">
-                Depoimentos
-              </a>
-              <button className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-6 py-2 rounded-full hover:from-orange-600 hover:to-red-600 transition-all duration-300 transform hover:scale-105">
-                Assinar agora
-              </button>
-            </nav>
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setIsAdmin(false);
+  };
 
-            {/* Mobile menu button */}
-            <button
-              className="md:hidden p-2"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
+  const selectPlan = (plan) => {
+    if (!isLoggedIn) {
+      setShowLoginModal(true);
+      return;
+    }
+    setSelectedPlan(plan);
+    setShowPaymentModal(true);
+  };
+
+  // Painel Admin Simplificado
+  if (isAdmin) {
+    return (
+      <div className="bg-gray-900 text-white p-6 min-h-screen">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-3xl font-bold text-orange-400">Painel Administrativo PetBox</h1>
+            <button 
+              onClick={handleLogout}
+              className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
             >
-              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              Sair
             </button>
           </div>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="bg-gray-800 p-6 rounded-lg">
+              <h3 className="font-semibold mb-2">Total de Clientes</h3>
+              <p className="text-3xl font-bold text-orange-400">0</p>
+              <p className="text-sm text-gray-400">Aguardando dados reais</p>
+            </div>
+            <div className="bg-gray-800 p-6 rounded-lg">
+              <h3 className="font-semibold mb-2">Assinaturas Ativas</h3>
+              <p className="text-3xl font-bold text-orange-400">0</p>
+              <p className="text-sm text-gray-400">Aguardando dados reais</p>
+            </div>
+            <div className="bg-gray-800 p-6 rounded-lg">
+              <h3 className="font-semibold mb-2">Receita Mensal</h3>
+              <p className="text-3xl font-bold text-orange-400">R$ 0,00</p>
+              <p className="text-sm text-gray-400">Aguardando dados reais</p>
+            </div>
+            <div className="bg-gray-800 p-6 rounded-lg">
+              <h3 className="font-semibold mb-2">Conversão</h3>
+              <p className="text-3xl font-bold text-orange-400">0%</p>
+              <p className="text-sm text-gray-400">Aguardando dados reais</p>
+            </div>
+          </div>
 
-          {/* Mobile Navigation */}
-          {isMenuOpen && (
-            <div className="md:hidden py-4 border-t border-orange-100">
-              <div className="flex flex-col space-y-4">
-                <a href="#como-funciona" className="text-gray-700 hover:text-orange-600 transition-colors">
-                  Como funciona
-                </a>
-                <a href="#planos" className="text-gray-700 hover:text-orange-600 transition-colors">
-                  Planos
-                </a>
-                <a href="#depoimentos" className="text-gray-700 hover:text-orange-600 transition-colors">
-                  Depoimentos
-                </a>
-                <button className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-6 py-2 rounded-full hover:from-orange-600 hover:to-red-600 transition-all duration-300 w-full">
-                  Assinar agora
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="bg-gray-800 p-6 rounded-lg">
+              <h3 className="font-semibold text-lg mb-4">Configurações Rápidas</h3>
+              <div className="space-y-3">
+                <button className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+                  Gerenciar Planos
+                </button>
+                <button className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">
+                  Configurar Pagamentos
+                </button>
+                <button className="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700">
+                  Personalizar Site
                 </button>
               </div>
             </div>
-          )}
+            
+            <div className="bg-gray-800 p-6 rounded-lg">
+              <h3 className="font-semibold text-lg mb-4">Ações Rápidas</h3>
+              <div className="space-y-3">
+                <button className="w-full bg-orange-600 text-white py-2 rounded hover:bg-orange-700">
+                  Exportar Relatório
+                </button>
+                <button className="w-full bg-yellow-600 text-white py-2 rounded hover:bg-yellow-700">
+                  Backup dos Dados
+                </button>
+                <button className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700">
+                  Ver Analytics
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Banner promocional */}
+      <div className="bg-orange-500 text-white text-center py-2 px-4 text-sm">
+        Primeira box com 30% de desconto! Use o código: PRIMEIRA30
+      </div>
+
+      {/* Header */}
+      <header className="bg-white shadow-sm sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            {/* Logo */}
+            <div className="flex items-center gap-2">
+              <Heart className="w-8 h-8 text-orange-500" />
+              <span className="text-xl font-bold text-gray-900">PetBox</span>
+            </div>
+
+            {/* Navigation Desktop */}
+            <nav className="hidden md:flex items-center space-x-8">
+              <a href="#" className="text-gray-900 hover:text-orange-500 transition-colors">Como Funciona</a>
+              <a href="#" className="text-gray-900 hover:text-orange-500 transition-colors">Planos</a>
+              <a href="#" className="text-gray-900 hover:text-orange-500 transition-colors">Blog</a>
+            </nav>
+
+            {/* User Actions */}
+            <div className="flex items-center gap-4">
+              {isLoggedIn ? (
+                <div className="flex items-center gap-2">
+                  <button className="flex items-center gap-2 text-gray-900 hover:text-orange-500 transition-colors">
+                    <User className="w-5 h-5" />
+                    <span className="hidden sm:inline">Minha Área</span>
+                  </button>
+                  <button 
+                    onClick={handleLogout}
+                    className="text-gray-500 hover:text-gray-900 transition-colors"
+                  >
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button 
+                    onClick={() => setShowLoginModal(true)}
+                    className="text-gray-900 hover:text-orange-500 transition-colors"
+                  >
+                    Entrar
+                  </button>
+                  <button 
+                    onClick={() => setShowRegisterModal(true)}
+                    className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors"
+                  >
+                    Cadastrar
+                  </button>
+                </>
+              )}
+              
+              {/* Mobile menu button */}
+              <button 
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="md:hidden text-gray-900"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile Navigation */}
+        {isMenuOpen && (
+          <div className="md:hidden bg-white border-t border-gray-200">
+            <div className="px-4 py-2 space-y-2">
+              <a href="#" className="block py-2 text-gray-900 hover:text-orange-500">Como Funciona</a>
+              <a href="#" className="block py-2 text-gray-900 hover:text-orange-500">Planos</a>
+              <a href="#" className="block py-2 text-gray-900 hover:text-orange-500">Blog</a>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Hero Section */}
-      <section className="relative py-20 lg:py-32 overflow-hidden">
+      <section className="py-20 bg-gradient-to-br from-orange-50 to-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="text-center lg:text-left">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
-                O clube de assinatura que seu{' '}
-                <span className="bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
-                  pet merece
-                </span>
-              </h1>
-              <p className="mt-6 text-xl text-gray-600 leading-relaxed">
-                Produtos premium selecionados especialmente para o seu melhor amigo. 
-                Ração, petiscos, brinquedos e acessórios entregues na sua porta todo mês.
-              </p>
-              <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                <button className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-8 py-4 rounded-full text-lg font-semibold hover:from-orange-600 hover:to-red-600 transition-all duration-300 transform hover:scale-105 shadow-lg">
-                  Começar agora
-                </button>
-                <button className="border-2 border-orange-300 text-orange-600 px-8 py-4 rounded-full text-lg font-semibold hover:bg-orange-50 transition-all duration-300">
-                  Ver como funciona
-                </button>
-              </div>
-              <div className="mt-8 flex items-center justify-center lg:justify-start space-x-6 text-sm text-gray-500">
-                <div className="flex items-center space-x-2">
-                  <Truck className="w-5 h-5 text-orange-500" />
-                  <span>Frete grátis</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Shield className="w-5 h-5 text-orange-500" />
-                  <span>Cancele quando quiser</span>
-                </div>
-              </div>
-            </div>
-            <div className="relative">
-              <div className="bg-gradient-to-br from-orange-200 to-red-200 rounded-3xl p-8 transform rotate-3 hover:rotate-0 transition-transform duration-500">
-                <div className="bg-white rounded-2xl p-6 shadow-xl">
-                  <div className="text-center">
-                    <div className="w-20 h-20 bg-gradient-to-br from-orange-400 to-red-500 rounded-full mx-auto mb-4 flex items-center justify-center">
-                      <Gift className="w-10 h-10 text-white" />
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">Sua PetBox chegou!</h3>
-                    <p className="text-gray-600 mb-4">5 produtos selecionados para Luna</p>
-                    <div className="space-y-2 text-sm text-gray-500">
-                      <div className="flex justify-between">
-                        <span>Ração Premium Royal Canin</span>
-                        <span>✓</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Brinquedo Kong Classic</span>
-                        <span>✓</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Petisco Natural DogShow</span>
-                        <span>✓</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          <div className="text-center">
+            <h1 className="text-4xl lg:text-6xl font-bold text-gray-900 mb-6">
+              Transforme momentos comuns em memórias extraordinárias
+            </h1>
+            <p className="text-xl lg:text-2xl text-gray-600 mb-8 max-w-4xl mx-auto">
+              Caixas mensais personalizadas com roupas, brinquedos e acessórios únicos para criar experiências inesquecíveis com seu pet
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button 
+                onClick={() => !isLoggedIn ? setShowRegisterModal(true) : selectPlan(plans[1])}
+                className="bg-orange-500 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-orange-600 transition-colors"
+              >
+                Começar Agora
+              </button>
+              <button className="border-2 border-orange-500 text-orange-500 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-orange-500 hover:text-white transition-colors">
+                Descobrir Plano Ideal
+              </button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Como Funciona */}
-      <section id="como-funciona" className="py-20 bg-white">
+      {/* Features Section */}
+      <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-              Como funciona o PetBox
+          <div className="text-center mb-12">
+            <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
+              Como funciona a magia?
             </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Um processo simples e personalizado para garantir que seu pet receba exatamente o que precisa
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Três passos simples para transformar a rotina do seu pet em momentos especiais
             </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center group">
-              <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-red-500 rounded-full mx-auto mb-6 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                <span className="text-2xl font-bold text-white">1</span>
+            <div className="text-center">
+              <div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Heart className="w-8 h-8 text-orange-500" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Conte sobre seu pet</h3>
-              <p className="text-gray-600">
-                Responda algumas perguntas sobre seu pet: porte, idade, preferências e necessidades especiais.
-              </p>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">1. Conte sobre seu pet</h3>
+              <p className="text-gray-600">Compartilhe as preferências, tamanho e personalidade do seu companheiro</p>
             </div>
 
-            <div className="text-center group">
-              <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-red-500 rounded-full mx-auto mb-6 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                <span className="text-2xl font-bold text-white">2</span>
+            <div className="text-center">
+              <div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Package className="w-8 h-8 text-orange-500" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Nós selecionamos</h3>
-              <p className="text-gray-600">
-                Nossa equipe de especialistas seleciona produtos premium personalizados para seu pet.
-              </p>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">2. Receba sua box personalizada</h3>
+              <p className="text-gray-600">Todo mês, produtos únicos escolhidos especialmente para seu pet</p>
             </div>
 
-            <div className="text-center group">
-              <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-red-500 rounded-full mx-auto mb-6 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                <span className="text-2xl font-bold text-white">3</span>
+            <div className="text-center">
+              <div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Star className="w-8 h-8 text-orange-500" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Receba em casa</h3>
-              <p className="text-gray-600">
-                Todo mês você recebe uma caixa especial com produtos selecionados, com frete grátis.
-              </p>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">3. Criem memórias juntos</h3>
+              <p className="text-gray-600">Momentos especiais com roupas, brinquedos e acessórios exclusivos</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Planos */}
-      <section id="planos" className="py-20 bg-gradient-to-br from-orange-50 to-red-50">
+      {/* Plans Section */}
+      <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-              Escolha o plano ideal
+          <div className="text-center mb-12">
+            <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
+              Escolha o plano perfeito
             </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Planos pensados para diferentes perfis e necessidades. Todos com produtos premium e frete grátis.
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Cada plano foi pensado para diferentes estilos e necessidades
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-7xl mx-auto">
             {plans.map((plan) => (
-              <div
+              <div 
                 key={plan.id}
-                className={`relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 ${
-                  plan.popular ? 'ring-2 ring-orange-500 scale-105' : ''
+                className={`bg-white p-8 rounded-2xl border-2 transition-all duration-300 hover:scale-105 ${
+                  plan.popular 
+                    ? 'border-orange-500 shadow-xl relative' 
+                    : 'border-gray-200 hover:border-orange-300'
                 }`}
               >
                 {plan.popular && (
                   <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                    <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-6 py-2 rounded-full text-sm font-semibold">
-                      Mais Popular
+                    <span className="bg-orange-500 text-white px-4 py-2 rounded-full text-sm font-bold">
+                      MAIS POPULAR
                     </span>
                   </div>
                 )}
-
-                <div className="text-center mb-8">
+                
+                <div className="text-center mb-6">
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
-                  <p className="text-gray-600 mb-4">{plan.description}</p>
-                  <div className="flex items-center justify-center space-x-2">
-                    <span className="text-4xl font-bold text-gray-900">{plan.price}</span>
-                    <div className="text-left">
-                      <div className="text-sm text-gray-500 line-through">{plan.originalPrice}</div>
-                      <div className="text-sm text-gray-600">/mês</div>
-                    </div>
-                  </div>
+                  <div className="text-4xl font-bold text-orange-500 mb-2">{plan.price}</div>
+                  <div className="text-gray-500">por mês</div>
+                  <p className="text-sm text-gray-600 mt-2">{plan.description}</p>
                 </div>
-
-                <ul className="space-y-4 mb-8">
-                  {plan.items.map((item, index) => (
-                    <li key={index} className="flex items-start space-x-3">
-                      <Check className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span className="text-gray-700">{item}</span>
+                
+                <ul className="space-y-3 mb-8">
+                  {plan.features.map((feature, index) => (
+                    <li key={index} className="flex items-center gap-3">
+                      <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                      <span className="text-sm text-gray-600">{feature}</span>
                     </li>
                   ))}
                 </ul>
-
-                <button
-                  className={`w-full py-4 rounded-full font-semibold transition-all duration-300 ${
+                
+                <button 
+                  onClick={() => selectPlan(plan)}
+                  className={`w-full py-3 rounded-lg font-semibold transition-colors ${
                     plan.popular
-                      ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 transform hover:scale-105'
-                      : 'border-2 border-orange-300 text-orange-600 hover:bg-orange-50'
+                      ? 'bg-orange-500 text-white hover:bg-orange-600'
+                      : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
                   }`}
                 >
                   Escolher {plan.name}
@@ -316,43 +486,59 @@ export default function PetBoxHome() {
               </div>
             ))}
           </div>
-
-          <div className="text-center mt-12">
-            <p className="text-gray-600 mb-4">
-              Não tem certeza? Comece com 30 dias grátis em qualquer plano
-            </p>
-            <button className="text-orange-600 hover:text-orange-700 font-semibold flex items-center justify-center space-x-2 mx-auto">
-              <span>Saiba mais sobre a garantia</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
         </div>
       </section>
 
-      {/* Depoimentos */}
-      <section id="depoimentos" className="py-20 bg-white">
+      {/* Testimonials */}
+      <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
               O que nossos clientes dizem
             </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Mais de 10.000 pets felizes e tutores satisfeitos em todo o Brasil
-            </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <div key={index} className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl p-8 hover:shadow-lg transition-shadow duration-300">
-                <div className="flex items-center mb-4">
+            {[
+              {
+                name: "Maria Silva",
+                pet: "Luna (Golden Retriever)",
+                text: "A Luna fica super animada quando a box chega! Os produtos são de ótima qualidade e sempre tem algo novo para descobrirmos juntas.",
+                rating: 5,
+                image: "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=64&h=64&fit=crop&crop=face"
+              },
+              {
+                name: "João Santos",
+                pet: "Thor (Bulldog Francês)",
+                text: "Melhor investimento que fiz para o Thor! Ele adora as roupinhas e os brinquedos são super resistentes. Recomendo muito!",
+                rating: 5,
+                image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=64&h=64&fit=crop&crop=face"
+              },
+              {
+                name: "Ana Costa",
+                pet: "Mimi (Gato Persa)",
+                text: "Mesmo sendo para gatos, a variedade é incrível! A Mimi se diverte muito e eu fico feliz vendo ela tão animada com os novos brinquedos.",
+                rating: 5,
+                image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=64&h=64&fit=crop&crop=face"
+              }
+            ].map((testimonial, index) => (
+              <div key={index} className="bg-gray-50 p-6 rounded-2xl">
+                <div className="flex mb-4">
                   {[...Array(testimonial.rating)].map((_, i) => (
-                    <Star key={i} className="w-5 h-5 text-yellow-400 fill-current" />
+                    <Star key={i} className="w-5 h-5 fill-orange-500 text-orange-500" />
                   ))}
                 </div>
-                <p className="text-gray-700 mb-6 italic">"{testimonial.text}"</p>
-                <div>
-                  <p className="font-semibold text-gray-900">{testimonial.name}</p>
-                  <p className="text-sm text-gray-600">Tutora da {testimonial.pet}</p>
+                <p className="text-gray-600 mb-4 italic">"{testimonial.text}"</p>
+                <div className="flex items-center gap-3">
+                  <img 
+                    src={testimonial.image} 
+                    alt={testimonial.name}
+                    className="w-12 h-12 rounded-full object-cover"
+                  />
+                  <div>
+                    <div className="font-semibold text-gray-900">{testimonial.name}</div>
+                    <div className="text-sm text-gray-500">Tutor do {testimonial.pet}</div>
+                  </div>
                 </div>
               </div>
             ))}
@@ -360,75 +546,340 @@ export default function PetBoxHome() {
         </div>
       </section>
 
-      {/* CTA Final */}
-      <section className="py-20 bg-gradient-to-r from-orange-500 to-red-500">
-        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
-            Pronto para fazer seu pet mais feliz?
+      {/* CTA Section */}
+      <section className="py-20 bg-orange-500">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-4xl lg:text-5xl font-bold text-white mb-6">
+            Pronto para começar?
           </h2>
-          <p className="text-xl text-orange-100 mb-8">
-            Junte-se a milhares de tutores que já descobriram a praticidade do PetBox
+          <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
+            Junte-se a milhares de tutores que já transformaram a rotina dos seus pets em momentos especiais
           </p>
-          <button className="bg-white text-orange-600 px-8 py-4 rounded-full text-lg font-semibold hover:bg-orange-50 transition-all duration-300 transform hover:scale-105 shadow-lg">
-            Começar minha assinatura
-          </button>
-          <p className="text-orange-100 mt-4 text-sm">
-            Primeira caixa grátis • Cancele quando quiser • Frete grátis para todo Brasil
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button 
+              onClick={() => !isLoggedIn ? setShowRegisterModal(true) : selectPlan(plans[1])}
+              className="bg-white text-orange-500 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-100 transition-colors"
+            >
+              Começar Minha Jornada
+            </button>
+            <button className="border-2 border-white text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-white hover:text-orange-500 transition-colors">
+              Fazer Quiz Personalizado
+            </button>
+          </div>
+          <p className="text-sm text-white/70 mt-4">
+            Primeira box com 30% de desconto • Sem fidelidade • Cancele quando quiser
           </p>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-16">
+      <footer className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-4 gap-8">
             <div>
-              <div className="flex items-center space-x-2 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-500 rounded-lg flex items-center justify-center">
-                  <Heart className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-xl font-bold">PetBox</span>
+              <div className="flex items-center gap-2 mb-4">
+                <Heart className="w-6 h-6 text-orange-500" />
+                <span className="text-lg font-bold">PetBox</span>
               </div>
-              <p className="text-gray-400">
-                O clube de assinatura que seu pet merece. Produtos premium entregues na sua porta.
+              <p className="text-gray-400 text-sm">
+                Transformando momentos comuns em memórias extraordinárias com seu pet.
               </p>
             </div>
             
             <div>
-              <h4 className="font-semibold mb-4">Empresa</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">Sobre nós</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Como funciona</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Parceiros</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Carreiras</a></li>
+              <h4 className="font-semibold mb-4">Produtos</h4>
+              <ul className="space-y-2 text-sm text-gray-400">
+                <li><a href="#" className="hover:text-white transition-colors">Como Funciona</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Planos</a></li>
               </ul>
             </div>
             
             <div>
               <h4 className="font-semibold mb-4">Suporte</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">Central de ajuda</a></li>
+              <ul className="space-y-2 text-sm text-gray-400">
+                <li><a href="#" className="hover:text-white transition-colors">Central de Ajuda</a></li>
                 <li><a href="#" className="hover:text-white transition-colors">Contato</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">WhatsApp</a></li>
                 <li><a href="#" className="hover:text-white transition-colors">FAQ</a></li>
               </ul>
             </div>
             
             <div>
-              <h4 className="font-semibold mb-4">Legal</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">Termos de uso</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Política de privacidade</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Política de cookies</a></li>
+              <h4 className="font-semibold mb-4">Empresa</h4>
+              <ul className="space-y-2 text-sm text-gray-400">
+                <li><a href="#" className="hover:text-white transition-colors">Sobre Nós</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Carreiras</a></li>
               </ul>
             </div>
           </div>
           
-          <div className="border-t border-gray-800 mt-12 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 PetBox. Todos os direitos reservados.</p>
+          <div className="border-t border-gray-800 mt-8 pt-8 flex justify-between items-center">
+            <p className="text-sm text-gray-400">
+              &copy; 2024 PetBox. Todos os direitos reservados.
+            </p>
+            
+            {/* Botão Admin no final da página */}
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className="text-xs text-gray-500 hover:text-orange-500 transition-colors"
+            >
+              Admin
+            </button>
           </div>
         </div>
       </footer>
+
+      {/* Login Modal */}
+      {showLoginModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-900">Entrar</h2>
+              <button 
+                onClick={() => setShowLoginModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleLogin} className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">E-mail</label>
+                  <input
+                    type="email"
+                    value={loginData.email}
+                    onChange={(e) => setLoginData(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">Senha</label>
+                  <input
+                    type="password"
+                    value={loginData.password}
+                    onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <button
+                type="submit"
+                className="w-full mt-6 bg-orange-500 text-white py-3 rounded-lg font-semibold hover:bg-orange-600 transition-colors"
+              >
+                Entrar
+              </button>
+              
+              <p className="text-center text-sm text-gray-600 mt-4">
+                Não tem conta?{' '}
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setShowLoginModal(false);
+                    setShowRegisterModal(true);
+                  }}
+                  className="text-orange-500 hover:underline"
+                >
+                  Cadastre-se
+                </button>
+              </p>
+              
+              <div className="mt-4 p-3 bg-blue-50 rounded text-xs text-blue-800">
+                <strong>Demo:</strong> Use admin@petbox.com / admin123 para acessar o painel admin
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Register Modal */}
+      {showRegisterModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-900">Cadastrar</h2>
+              <button 
+                onClick={() => setShowRegisterModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleRegister} className="p-6">
+              <div className="grid md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-3">Seus dados</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-1">Nome completo</label>
+                      <input
+                        type="text"
+                        value={registerData.tutorName}
+                        onChange={(e) => setRegisterData(prev => ({ ...prev, tutorName: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-1">E-mail</label>
+                      <input
+                        type="email"
+                        value={registerData.email}
+                        onChange={(e) => setRegisterData(prev => ({ ...prev, email: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-1">Senha</label>
+                      <input
+                        type="password"
+                        value={registerData.password}
+                        onChange={(e) => setRegisterData(prev => ({ ...prev, password: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-3">Dados do seu pet</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-1">Nome do pet</label>
+                      <input
+                        type="text"
+                        value={registerData.petName}
+                        onChange={(e) => setRegisterData(prev => ({ ...prev, petName: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-1">Tipo</label>
+                      <select
+                        value={registerData.petType}
+                        onChange={(e) => setRegisterData(prev => ({ ...prev, petType: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        required
+                      >
+                        <option value="">Selecione</option>
+                        <option value="Cachorro">Cachorro</option>
+                        <option value="Gato">Gato</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-1">Idade</label>
+                      <select
+                        value={registerData.petAge}
+                        onChange={(e) => setRegisterData(prev => ({ ...prev, petAge: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        required
+                      >
+                        <option value="">Selecione</option>
+                        <option value="Filhote (0-1 ano)">Filhote (0-1 ano)</option>
+                        <option value="Jovem (1-3 anos)">Jovem (1-3 anos)</option>
+                        <option value="Adulto (3-7 anos)">Adulto (3-7 anos)</option>
+                        <option value="Idoso (7+ anos)">Idoso (7+ anos)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-1">Porte</label>
+                      <select
+                        value={registerData.petSize}
+                        onChange={(e) => setRegisterData(prev => ({ ...prev, petSize: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        required
+                      >
+                        <option value="">Selecione</option>
+                        <option value="Pequeno">Pequeno (até 10kg)</option>
+                        <option value="Médio">Médio (10-25kg)</option>
+                        <option value="Grande">Grande (25kg+)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <button
+                type="submit"
+                className="w-full bg-orange-500 text-white py-3 rounded-lg font-semibold hover:bg-orange-600 transition-colors"
+              >
+                Criar Conta
+              </button>
+              
+              <p className="text-center text-sm text-gray-600 mt-4">
+                Já tem conta?{' '}
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setShowRegisterModal(false);
+                    setShowLoginModal(true);
+                  }}
+                  className="text-orange-500 hover:underline"
+                >
+                  Faça login
+                </button>
+              </p>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && selectedPlan && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-900">Confirmar Pagamento</h2>
+              <button 
+                onClick={() => setShowPaymentModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <div className="text-center mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">{selectedPlan.name}</h3>
+                <div className="text-3xl font-bold text-orange-500 mb-2">{selectedPlan.price}</div>
+                <div className="text-gray-500">por mês</div>
+              </div>
+              
+              <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <CreditCard className="w-5 h-5 text-orange-500" />
+                  <span className="font-medium text-gray-900">Pagamento via PIX</span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Você será redirecionado para o gateway de pagamento seguro da FuriaPay para completar a transação.
+                </p>
+              </div>
+              
+              <button
+                onClick={() => processPayment(selectedPlan)}
+                className="w-full bg-orange-500 text-white py-3 rounded-lg font-semibold hover:bg-orange-600 transition-colors mb-4"
+              >
+                Pagar com PIX
+              </button>
+              
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                className="w-full border border-gray-300 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
