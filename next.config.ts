@@ -1,199 +1,73 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  devIndicators: false, // Remove widget de desenvolvimento Next.js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // Configurações para Netlify
+  output: 'standalone',
   
-  // Ignorar erros durante build (compatibilidade Vercel)
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  
-  // Configuração de imagens para principais provedores
+  // Otimizações de imagem
   images: {
-    remotePatterns: [
-      // Unsplash - Banco de imagens gratuitas
-      {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'unsplash.com',
-      },
-      
-      // Supabase Storage
-      {
-        protocol: 'https',
-        hostname: '*.supabase.co',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.supabase.com',
-      },
-      
-      // Firebase Storage
-      {
-        protocol: 'https',
-        hostname: 'firebasestorage.googleapis.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'storage.googleapis.com',
-      },
-      
-      // AWS S3 e CloudFront
-      {
-        protocol: 'https',
-        hostname: '*.amazonaws.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.cloudfront.net',
-      },
-      {
-        protocol: 'https',
-        hostname: 's3.amazonaws.com',
-      },
-      
-      // Vercel Blob
-      {
-        protocol: 'https',
-        hostname: '*.vercel-storage.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.public.blob.vercel-storage.com',
-      },
-      
-      // Cloudinary
-      {
-        protocol: 'https',
-        hostname: 'res.cloudinary.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.cloudinary.com',
-      },
-      
-      // Pexels - Banco de imagens gratuitas
-      {
-        protocol: 'https',
-        hostname: 'images.pexels.com',
-      },
-      
-      // Pixabay - Banco de imagens gratuitas
-      {
-        protocol: 'https',
-        hostname: 'pixabay.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'cdn.pixabay.com',
-      },
-      
-      // GitHub (avatares, imagens de repos)
-      {
-        protocol: 'https',
-        hostname: 'github.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'avatars.githubusercontent.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'raw.githubusercontent.com',
-      },
-      
-      // Imgur
-      {
-        protocol: 'https',
-        hostname: 'i.imgur.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'imgur.com',
-      },
-      
-      // Google Drive
-      {
-        protocol: 'https',
-        hostname: 'drive.google.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'lh3.googleusercontent.com',
-      },
-      
-      // YouTube thumbnails
-      {
-        protocol: 'https',
-        hostname: 'img.youtube.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'i.ytimg.com',
-      },
-      
-      // Vimeo thumbnails
-      {
-        protocol: 'https',
-        hostname: 'i.vimeocdn.com',
-      },
-      
-      // CDNs populares
-      {
-        protocol: 'https',
-        hostname: 'cdn.jsdelivr.net',
-      },
-      {
-        protocol: 'https',
-        hostname: 'unpkg.com',
-      },
-      
-      // Outros provedores populares
-      {
-        protocol: 'https',
-        hostname: '*.uploadthing.com', // UploadThing
-      },
-      {
-        protocol: 'https',
-        hostname: '*.imagekit.io', // ImageKit
-      },
-      {
-        protocol: 'https',
-        hostname: '*.sanity.io', // Sanity CMS
-      },
-      {
-        protocol: 'https',
-        hostname: 'assets.vercel.com', // Vercel assets
-      },
-      
-      // Para desenvolvimento local
-      {
-        protocol: 'http',
-        hostname: 'localhost',
-      },
-      {
-        protocol: 'https',
-        hostname: 'localhost',
-      },
-    ],
-    
-    // Formatos de imagem suportados
-    formats: ['image/webp', 'image/avif'],
-    
-    // Tamanhos otimizados para diferentes dispositivos
-    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    domains: ['images.unsplash.com', 'via.placeholder.com'],
+    unoptimized: process.env.NODE_ENV === 'development',
   },
   
-  // Configuração experimental para melhor performance
+  // Configurações de ambiente
+  env: {
+    NEXT_PUBLIC_FURIA_PUBLIC_KEY: process.env.NEXT_PUBLIC_FURIA_PUBLIC_KEY,
+    FURIA_ENVIRONMENT: process.env.FURIA_ENVIRONMENT || 'production',
+  },
+  
+  // Headers de segurança
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-DNS-Prefetch-Control',
+            value: 'on'
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload'
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff'
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN'
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block'
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin'
+          }
+        ],
+      },
+    ]
+  },
+  
+  // Configurações de webpack
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      };
+    }
+    return config;
+  },
+  
+  // Experimental features
   experimental: {
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
+    serverActions: {
+      bodySizeLimit: '2mb',
+    },
   },
 };
 
