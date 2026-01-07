@@ -56,6 +56,8 @@ interface PaymentResponse {
   secureUrl?: string;
   message?: string;
   transactionId?: string;
+  pixQrCode?: string;
+  pixCode?: string;
 }
 
 // Declaração global para o FuriaPay
@@ -169,6 +171,29 @@ export default function PetBoxHome() {
   // Função para formatar número do cartão
   const formatCardNumber = (value: string): string => {
     return furiaPayUtils.formatCardNumber(value);
+  };
+
+  // Função para formatar CPF
+  const formatCPF = (value: string): string => {
+    const numbers = value.replace(/\D/g, '');
+    if (numbers.length <= 11) {
+      return numbers
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    }
+    return value;
+  };
+
+  // Função para formatar telefone
+  const formatPhone = (value: string): string => {
+    const numbers = value.replace(/\D/g, '');
+    if (numbers.length <= 11) {
+      return numbers
+        .replace(/(\d{2})(\d)/, '($1) $2')
+        .replace(/(\d{5})(\d)/, '$1-$2');
+    }
+    return value;
   };
 
   // Função para processar pagamento com cartão de crédito
@@ -384,13 +409,20 @@ export default function PetBoxHome() {
         if (data.secureUrl) {
           // Redirecionar para página de pagamento PIX
           console.log('Redirecionando para PIX:', data.secureUrl);
+          alert('PIX gerado com sucesso! Você será redirecionado para a página de pagamento.');
           window.location.href = data.secureUrl;
-        } else if (data.pixQrCode) {
-          // Mostrar QR Code PIX (implementar modal se necessário)
-          alert('PIX gerado com sucesso! Você será redirecionado para o pagamento.');
-          // Aqui você pode implementar um modal com QR Code
+        } else if (data.pixQrCode || data.pixCode) {
+          // Mostrar QR Code PIX
+          const pixInfo = `PIX gerado com sucesso!\n\nCódigo PIX Copia e Cola:\n${data.pixCode || 'N/A'}\n\nVocê pode copiar o código acima ou escanear o QR Code para realizar o pagamento.`;
+          alert(pixInfo);
+          console.log('PIX QR Code:', data.pixQrCode);
+          console.log('PIX Code:', data.pixCode);
+          // Não fechar o modal para o usuário poder copiar o código
+        } else if (data.status === 'pending' || data.status === 'processing') {
+          alert('PIX processado com sucesso! Aguarde as instruções de pagamento no seu e-mail.');
+          setShowPaymentModal(false);
         } else {
-          alert('PIX processado com sucesso! Aguarde as instruções de pagamento.');
+          alert('PIX gerado com sucesso! Verifique seu e-mail para instruções de pagamento.');
           setShowPaymentModal(false);
         }
       } else {
@@ -945,8 +977,13 @@ export default function PetBoxHome() {
               <h4 className="font-semibold mb-4">Suporte</h4>
               <ul className="space-y-2 text-sm text-gray-400">
                 <li><a href="#" className="hover:text-white transition-colors">Central de Ajuda</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Contato</a></li>
+                <li><a href="mailto:contato@clubinhopetbox.com.br" className="hover:text-white transition-colors">Contato</a></li>
                 <li><a href="#" className="hover:text-white transition-colors">FAQ</a></li>
+                <li className="pt-2">
+                  <a href="mailto:contato@clubinhopetbox.com.br" className="hover:text-orange-500 transition-colors">
+                    contato@clubinhopetbox.com.br
+                  </a>
+                </li>
               </ul>
             </div>
             
@@ -1064,7 +1101,7 @@ export default function PetBoxHome() {
                         type="text"
                         value={registerData.tutorName}
                         onChange={(e) => setRegisterData(prev => ({ ...prev, tutorName: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         required
                       />
                     </div>
@@ -1074,7 +1111,7 @@ export default function PetBoxHome() {
                         type="email"
                         value={registerData.email}
                         onChange={(e) => setRegisterData(prev => ({ ...prev, email: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         required
                       />
                     </div>
@@ -1084,7 +1121,7 @@ export default function PetBoxHome() {
                         type="password"
                         value={registerData.password}
                         onChange={(e) => setRegisterData(prev => ({ ...prev, password: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         required
                       />
                     </div>
@@ -1100,7 +1137,7 @@ export default function PetBoxHome() {
                         type="text"
                         value={registerData.petName}
                         onChange={(e) => setRegisterData(prev => ({ ...prev, petName: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         required
                       />
                     </div>
@@ -1109,7 +1146,7 @@ export default function PetBoxHome() {
                       <select
                         value={registerData.petType}
                         onChange={(e) => setRegisterData(prev => ({ ...prev, petType: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         required
                       >
                         <option value="">Selecione</option>
@@ -1122,7 +1159,7 @@ export default function PetBoxHome() {
                       <select
                         value={registerData.petAge}
                         onChange={(e) => setRegisterData(prev => ({ ...prev, petAge: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         required
                       >
                         <option value="">Selecione</option>
@@ -1137,7 +1174,7 @@ export default function PetBoxHome() {
                       <select
                         value={registerData.petSize}
                         onChange={(e) => setRegisterData(prev => ({ ...prev, petSize: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         required
                       >
                         <option value="">Selecione</option>
@@ -1243,7 +1280,7 @@ export default function PetBoxHome() {
                       type="text"
                       value={customerData.name}
                       onChange={(e) => setCustomerData(prev => ({ ...prev, name: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                       required
                     />
                   </div>
@@ -1253,7 +1290,7 @@ export default function PetBoxHome() {
                       type="email"
                       value={customerData.email}
                       onChange={(e) => setCustomerData(prev => ({ ...prev, email: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                       required
                     />
                   </div>
@@ -1262,9 +1299,10 @@ export default function PetBoxHome() {
                     <input
                       type="tel"
                       value={customerData.phone}
-                      onChange={(e) => setCustomerData(prev => ({ ...prev, phone: e.target.value }))}
+                      onChange={(e) => setCustomerData(prev => ({ ...prev, phone: formatPhone(e.target.value) }))}
                       placeholder="(11) 99999-9999"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      maxLength={15}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                   </div>
                   <div>
@@ -1272,9 +1310,10 @@ export default function PetBoxHome() {
                     <input
                       type="text"
                       value={customerData.document}
-                      onChange={(e) => setCustomerData(prev => ({ ...prev, document: e.target.value }))}
+                      onChange={(e) => setCustomerData(prev => ({ ...prev, document: formatCPF(e.target.value) }))}
                       placeholder="000.000.000-00"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      maxLength={14}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                       required
                     />
                   </div>
@@ -1292,7 +1331,7 @@ export default function PetBoxHome() {
                       value={customerData.zipCode}
                       onChange={(e) => setCustomerData(prev => ({ ...prev, zipCode: e.target.value }))}
                       placeholder="00000-000"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                   </div>
                   <div>
@@ -1301,7 +1340,7 @@ export default function PetBoxHome() {
                       type="text"
                       value={customerData.street}
                       onChange={(e) => setCustomerData(prev => ({ ...prev, street: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                   </div>
                   <div>
@@ -1310,7 +1349,7 @@ export default function PetBoxHome() {
                       type="text"
                       value={customerData.streetNumber}
                       onChange={(e) => setCustomerData(prev => ({ ...prev, streetNumber: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                   </div>
                   <div>
@@ -1319,7 +1358,7 @@ export default function PetBoxHome() {
                       type="text"
                       value={customerData.neighborhood}
                       onChange={(e) => setCustomerData(prev => ({ ...prev, neighborhood: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                   </div>
                   <div>
@@ -1328,7 +1367,7 @@ export default function PetBoxHome() {
                       type="text"
                       value={customerData.city}
                       onChange={(e) => setCustomerData(prev => ({ ...prev, city: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                   </div>
                   <div>
@@ -1336,7 +1375,7 @@ export default function PetBoxHome() {
                     <select
                       value={customerData.state}
                       onChange={(e) => setCustomerData(prev => ({ ...prev, state: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     >
                       <option value="">Selecione</option>
                       <option value="SP">São Paulo</option>
@@ -1370,7 +1409,7 @@ export default function PetBoxHome() {
                         onChange={(e) => setCardData(prev => ({ ...prev, number: formatCardNumber(e.target.value) }))}
                         placeholder="0000 0000 0000 0000"
                         maxLength={19}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         required
                       />
                     </div>
@@ -1381,7 +1420,7 @@ export default function PetBoxHome() {
                         value={cardData.holderName}
                         onChange={(e) => setCardData(prev => ({ ...prev, holderName: e.target.value.toUpperCase() }))}
                         placeholder="NOME COMO NO CARTÃO"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         required
                       />
                     </div>
@@ -1390,7 +1429,7 @@ export default function PetBoxHome() {
                       <select
                         value={cardData.expirationMonth}
                         onChange={(e) => setCardData(prev => ({ ...prev, expirationMonth: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         required
                       >
                         <option value="">Mês</option>
@@ -1406,7 +1445,7 @@ export default function PetBoxHome() {
                       <select
                         value={cardData.expirationYear}
                         onChange={(e) => setCardData(prev => ({ ...prev, expirationYear: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         required
                       >
                         <option value="">Ano</option>
@@ -1428,7 +1467,7 @@ export default function PetBoxHome() {
                         onChange={(e) => setCardData(prev => ({ ...prev, cvv: e.target.value.replace(/\D/g, '') }))}
                         placeholder="123"
                         maxLength={4}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         required
                       />
                     </div>

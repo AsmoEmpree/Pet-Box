@@ -147,10 +147,10 @@ export async function POST(request: NextRequest) {
     // Para PIX, incluir dados de pagamento
     if (body.paymentMethod === 'pix') {
       if (transactionData.pix_qr_code) {
-        responseData.pixQrCode = transactionData.pix_qr_code;
+        (responseData as any).pixQrCode = transactionData.pix_qr_code;
       }
       if (transactionData.pix_code) {
-        responseData.pixCode = transactionData.pix_code;
+        (responseData as any).pixCode = transactionData.pix_code;
       }
     }
 
